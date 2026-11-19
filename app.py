@@ -146,9 +146,12 @@ HTML_TEMPLATE = """
         table { width: 100%; border-collapse: collapse; font-size: 0.88rem; }
         th { background: #0f172a; color: white; padding: 10px; text-align: left; }
         td { padding: 10px; border-bottom: 1px solid #e2e8f0; }
+        tbody tr.fila-paciente { cursor: pointer; transition: background 0.15s; }
+        tbody tr.fila-paciente:hover { filter: brightness(0.95); }
         tr.critico { background: #fee2e2; color: #991b1b; }
         tr.urgente { background: #fef3c7; color: #92400e; }
         .inspector { background: #e0f2fe; border: 1px solid #bae6fd; padding: 12px; border-radius: 6px; margin: 14px 0; font-size: 0.9rem; color: #0c4a6e; font-weight: 600; }
+        .alerta-prioridad { display: none; background: #fef2f2; border: 1px solid #ef4444; border-left: 5px solid #dc2626; color: #991b1b; padding: 12px 16px; border-radius: 6px; margin-bottom: 14px; font-size: 0.9rem; font-weight: 600; }
         .log { background: #0f172a; color: #e2e8f0; font-family: monospace; padding: 14px; border-radius: 6px; height: 130px; overflow-y: auto; font-size: 0.85rem; }
         @media (max-width: 900px) { .container { grid-template-columns: 1fr; } .kpis { grid-template-columns: 1fr 1fr; } }
     </style>
@@ -185,6 +188,8 @@ HTML_TEMPLATE = """
     </div>
 
     <div>
+        <div id="banner-alerta" class="alerta-prioridad"></div>
+
         <div class="kpis">
             <div class="kpi"><small>NODOS EN FRONTERA</small><div>{{ frontera|length }} pacientes</div></div>
             <div class="kpi" style="border-top-color:#ef4444;"><small>SIGUIENTE A EXPANDIR</small><div>{{ frontera[0].nombre if frontera else 'Sala libre' }}</div></div>
@@ -193,14 +198,15 @@ HTML_TEMPLATE = """
         </div>
 
         <div class="card">
-            <h3 style="margin-top:0; font-size:0.95rem;">Frontera de Búsqueda Activa (Cola de Prioridad)</h3>
+            <h3 style="margin-top:0; font-size:0.95rem;">Frontera de Búsqueda Activa (Haz clic en un paciente para inspeccionar)</h3>
             <table>
                 <thead>
                     <tr><th>Turno</th><th>h(n)</th><th>Paciente</th><th>Edad</th><th>Síntoma Principal</th><th>SpO₂ / FC</th><th>Espera</th><th>Clasificación</th></tr>
                 </thead>
                 <tbody>
                     {% for n in frontera %}
-                    <tr class="{% if n.h_score <= 25 %}critico{% elif n.h_score <= 50 %}urgente{% endif %}">
+                    <tr class="fila-paciente {% if n.h_score <= 25 %}critico{% elif n.h_score <= 50 %}urgente{% endif %}"
+                        onclick="seleccionarPaciente({{ loop.index }}, '{{ n.nombre }}', '{{ n.h_score }}', '{{ n.desglose }}', '{{ frontera[0].nombre }}', '{{ frontera[0].h_score }}')">
                         <td><strong>#{{ loop.index }}</strong></td>
                         <td><strong>{{ "%.1f"|format(n.h_score) }}</strong></td>
                         <td>{{ n.nombre }}</td>
@@ -227,7 +233,7 @@ HTML_TEMPLATE = """
             {% endif %}
         </div>
 
-        <div class="inspector">
+        <div class="inspector" id="texto-inspector">
             🔍 INSPECTOR HEURÍSTICO:
             {% if frontera %}
                 Prioridad #1: {{ frontera[0].nombre }} → h(n) = {{ frontera[0].h_score }} ({{ frontera[0].desglose }})
@@ -244,6 +250,26 @@ HTML_TEMPLATE = """
         </div>
     </div>
 </div>
+
+<script>
+function seleccionarPaciente(turno, nombre, hScore, desglose, primeroNombre, primeroH) {
+    const inspector = document.getElementById("texto-inspector");
+    const banner = document.getElementById("banner-alerta");
+
+    inspector.innerHTML = `🔍 INSPECTOR HEURÍSTICO: ${nombre} (Turno #${turno}) → h(n) = ${hScore} pts (${desglose})`;
+
+    if (turno > 1) {
+        const mensaje = `⚠️ RESTRICCIÓN DE PRIORIDAD (BEST-FIRST SEARCH):\n\n` +
+                        `Seleccionaste a ${nombre} (Turno #${turno}, h(n) = ${hScore} pts).\n` +
+                        `No puede ser atendido todavía: primero se deben atender los pacientes que están antes por su mayor prioridad clínica (iniciando con ${primeroNombre}, h(n) = ${primeroH} pts).`;
+        banner.style.display = "block";
+        banner.innerText = `⚠️ Atención bloqueada para ${nombre} (Turno #${turno}): Primero se deben atender los pacientes que están antes por su prioridad heurística (Turno #1: ${primeroNombre} con h(n) = ${primeroH} pts).`;
+        alert(mensaje);
+    } else {
+        banner.style.display = "none";
+    }
+}
+</script>
 </body>
 </html>
 """
